@@ -50,6 +50,7 @@ services:
       LLM_MODEL: ${LLM_MODEL:-gpt-4.1-mini}
       TTS_MODEL: ${TTS_MODEL:-gpt-4o-mini-tts}
       TTS_VOICE: ${TTS_VOICE:-alloy}
+      LOG_TRANSCRIPTS: ${LOG_TRANSCRIPTS:-false}
       TTS_ENABLED: ${TTS_ENABLED:-false}
       TTS_BASE_URL: ${TTS_BASE_URL:-}
       TTS_API_KEY: ${TTS_API_KEY:-}

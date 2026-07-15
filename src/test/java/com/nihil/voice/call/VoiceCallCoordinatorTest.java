@@ -10,11 +10,34 @@ import com.nihil.voice.stt.SttEvent;
 import java.util.ArrayList;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 class VoiceCallCoordinatorTest {
+    @Test void logsPartialAndFinalTranscriptsWhenExplicitlyEnabled() {
+        var call=CallSession.create(UUID.randomUUID(),"caller",null,null);
+        call.transitionTo(CallState.ANSWERED);call.transitionTo(CallState.LISTENING);
+        SttClient stt=audio->Flux.just(
+            new SttEvent(SttEvent.Type.PARTIAL,"event-p","Sala",null,null),
+            new SttEvent(SttEvent.Type.FINAL,"event-f","Salam",null,null));
+        var cancellations=new TurnCancellationRegistry();
+        var conversation=new ConversationService(messages->Flux.empty(),text->Flux.empty(),cancellations);
+        var logger=(Logger)LoggerFactory.getLogger(VoiceCallCoordinator.class);
+        var appender=new ListAppender<ILoggingEvent>();appender.start();logger.addAppender(appender);
+        try {
+            StepVerifier.create(new VoiceCallCoordinator(stt,conversation,cancellations,true)
+                .run(call,new RecordingMediaConnection())).verifyComplete();
+            assertThat(appender.list).extracting(ILoggingEvent::getFormattedMessage)
+                .anyMatch(line->line.contains("STT PARTIAL")&&line.contains("Sala"))
+                .anyMatch(line->line.contains("STT FINAL")&&line.contains("Salam"));
+        } finally { logger.detachAppender(appender); }
+    }
+
     @Test void finalTranscriptFlowsThroughConversationAndBackToMedia() {
         var call=CallSession.create(UUID.randomUUID(),"caller",null,null);
         call.transitionTo(CallState.ANSWERED);call.transitionTo(CallState.LISTENING);

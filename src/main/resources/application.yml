@@ -44,6 +44,8 @@ logging:
     format:
       console: ecs
 voice:
+  logging:
+    transcripts: ${LOG_TRANSCRIPTS:false}
   asterisk:
     enabled: ${ASTERISK_ENABLED:false}
     base-url: ${ASTERISK_BASE_URL:http://127.0.0.1:8088}

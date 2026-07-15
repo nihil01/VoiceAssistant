@@ -48,7 +48,9 @@ public class AsteriskConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "voice.asterisk", name = "enabled", havingValue = "true")
-    AriListenerLifecycle ariListenerLifecycle(AriEventStream stream, AriEventHandler handler) {
+    AriListenerLifecycle ariListenerLifecycle(AriEventStream stream, AriEventHandler handler,
+                                              AsteriskProperties properties) {
+        AsteriskStartupValidator.validate(properties);
         return new AriListenerLifecycle(new AriEventListener(stream, handler));
     }
 
