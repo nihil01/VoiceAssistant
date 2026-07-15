@@ -1,0 +1,82 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+spring:
+  application:
+    name: voice-agent-service
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  r2dbc:
+    url: ${R2DBC_URL:r2dbc:postgresql://localhost:5432/voice_agent}
+    username: ${DB_USERNAME:voice_agent}
+    password: ${DB_PASSWORD:voice_agent}
+    pool:
+      initial-size: 2
+      max-size: ${DB_POOL_MAX_SIZE:20}
+  datasource:
+    url: ${JDBC_URL:jdbc:postgresql://localhost:5432/voice_agent}
+    username: ${DB_USERNAME:voice_agent}
+    password: ${DB_PASSWORD:voice_agent}
+  flyway:
+    enabled: true
+    url: ${JDBC_URL:jdbc:postgresql://localhost:5432/voice_agent}
+    user: ${DB_USERNAME:voice_agent}
+    password: ${DB_PASSWORD:voice_agent}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+logging:
+  structured:
+    format:
+      console: ecs
+voice:
+  asterisk:
+    enabled: ${ASTERISK_ENABLED:false}
+    base-url: ${ASTERISK_BASE_URL:http://127.0.0.1:8088}
+    username: ${ARI_USERNAME:}
+    password: ${ARI_PASSWORD:}
+    app: ${ARI_APP:ai-agent}
+    media-format: ${MEDIA_FORMAT:slin16}
+    media-direction: ${MEDIA_DIRECTION:both}
+    media-ws-base-url: ${ASTERISK_MEDIA_WS_BASE_URL:ws://127.0.0.1:8088/media}
+    request-timeout: ${ARI_REQUEST_TIMEOUT:5s}
+    no-frame-timeout: ${MEDIA_NO_FRAME_TIMEOUT:3s}
+    inbound-buffer-frames: ${MEDIA_INBOUND_BUFFER_FRAMES:256}
+    outbound-buffer-frames: ${MEDIA_OUTBOUND_BUFFER_FRAMES:256}
+  providers:
+    openai:
+      enabled: ${OPENAI_ENABLED:false}
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      stt-url: ${STT_WS_URL:wss://api.openai.com/v1/realtime?intent=transcription}
+      stt-model: ${STT_MODEL:gpt-realtime-whisper}
+      stt-language: ${STT_LANGUAGE:}
+      stt-source-rate: ${MEDIA_SAMPLE_RATE:16000}
+      stt-provider-rate: ${STT_SAMPLE_RATE:24000}
+      llm-model: ${LLM_MODEL:gpt-4.1-mini}
+      llm-timeout: ${LLM_TIMEOUT:20s}
+      tts-model: ${TTS_MODEL:gpt-4o-mini-tts}
+      tts-voice: ${TTS_VOICE:alloy}
+      tts-timeout: ${TTS_TIMEOUT:20s}
+    tts:
+      enabled: ${TTS_ENABLED:false}
+      base-url: ${TTS_BASE_URL:}
+      api-key: ${TTS_API_KEY:}
+  twenty:
+    enabled: ${TWENTY_ENABLED:false}
+    base-url: ${TWENTY_BASE_URL:}
+    api-key: ${TWENTY_API_KEY:}

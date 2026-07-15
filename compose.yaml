@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: voice_agent
+      POSTGRES_USER: voice_agent
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-voice_agent_dev_only}
+    volumes:
+      - voice-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voice_agent -d voice_agent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - voice-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  voice-agent:
+    build: .
+    environment:
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/voice_agent
+      JDBC_URL: jdbc:postgresql://postgres:5432/voice_agent
+      DB_USERNAME: voice_agent
+      DB_PASSWORD: ${DB_PASSWORD:-voice_agent_dev_only}
+      REDIS_HOST: redis
+      ASTERISK_ENABLED: ${ASTERISK_ENABLED:-false}
+      ASTERISK_BASE_URL: ${ASTERISK_BASE_URL:-http://host.docker.internal:8088}
+      ARI_USERNAME: ${ARI_USERNAME:-}
+      ARI_PASSWORD: ${ARI_PASSWORD:-}
+      ARI_APP: ${ARI_APP:-ai-agent}
+      MEDIA_FORMAT: ${MEDIA_FORMAT:-slin16}
+      MEDIA_DIRECTION: ${MEDIA_DIRECTION:-both}
+      ASTERISK_MEDIA_WS_BASE_URL: ${ASTERISK_MEDIA_WS_BASE_URL:-ws://host.docker.internal:8088/media}
+      OPENAI_ENABLED: ${OPENAI_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      STT_MODEL: ${STT_MODEL:-gpt-realtime-whisper}
+      STT_LANGUAGE: ${STT_LANGUAGE:-}
+      STT_SAMPLE_RATE: ${STT_SAMPLE_RATE:-24000}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4.1-mini}
+      TTS_MODEL: ${TTS_MODEL:-gpt-4o-mini-tts}
+      TTS_VOICE: ${TTS_VOICE:-alloy}
+      TTS_ENABLED: ${TTS_ENABLED:-false}
+      TTS_BASE_URL: ${TTS_BASE_URL:-}
+      TTS_API_KEY: ${TTS_API_KEY:-}
+      TWENTY_ENABLED: ${TWENTY_ENABLED:-false}
+      TWENTY_BASE_URL: ${TWENTY_BASE_URL:-}
+      TWENTY_API_KEY: ${TWENTY_API_KEY:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "127.0.0.1:${VOICE_AGENT_PORT:-8091}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  voice-postgres:
+  voice-redis:

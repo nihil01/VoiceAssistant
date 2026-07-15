@@ -1,0 +1,39 @@
+package com.nihil.voice.asterisk;
+
+import com.nihil.voice.config.AsteriskProperties;
+import java.time.Duration;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.reactive.socket.WebSocketMessage;
+import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
+import org.springframework.web.reactive.socket.client.WebSocketClient;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
+import reactor.util.retry.Retry;
+
+/** Cold, reconnecting ARI event stream. Authorization is sent as a header and never logged. */
+public final class AriEventStream {
+    private final WebSocketClient client;
+    private final AsteriskProperties properties;
+    private final AriEventParser parser;
+
+    public AriEventStream(AsteriskProperties properties, AriEventParser parser) {
+        this(new ReactorNettyWebSocketClient(), properties, parser);
+    }
+    AriEventStream(WebSocketClient client, AsteriskProperties properties, AriEventParser parser) {
+        this.client = client; this.properties = properties; this.parser = parser;
+    }
+
+    public Flux<AriEvent> events() {
+        return Flux.<AriEvent>create(emitter -> {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBasicAuth(properties.username(), properties.password() == null ? "" : properties.password());
+            Disposable connection = client.execute(properties.eventsUri(), headers, session ->
+                session.receive().filter(message -> message.getType() == WebSocketMessage.Type.TEXT)
+                    .map(WebSocketMessage::getPayloadAsText)
+                    .doOnNext(raw -> parser.parse(raw).ifPresent(emitter::next))
+                    .then()
+            ).subscribe(ignored -> { }, emitter::error, emitter::complete);
+            emitter.onDispose(connection);
+        }).retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(1)).maxBackoff(Duration.ofSeconds(30)));
+    }
+}
