@@ -69,6 +69,10 @@ voice:
       stt-language: ${STT_LANGUAGE:}
       stt-source-rate: ${MEDIA_SAMPLE_RATE:16000}
       stt-provider-rate: ${STT_SAMPLE_RATE:24000}
+      stt-vad-rms-threshold: ${STT_VAD_RMS_THRESHOLD:400}
+      stt-minimum-speech: ${STT_MINIMUM_SPEECH:100ms}
+      stt-end-silence: ${STT_END_SILENCE:600ms}
+      stt-maximum-utterance: ${STT_MAXIMUM_UTTERANCE:15s}
       llm-model: ${LLM_MODEL:gpt-4.1-mini}
       llm-timeout: ${LLM_TIMEOUT:20s}
       tts-model: ${TTS_MODEL:gpt-4o-mini-tts}

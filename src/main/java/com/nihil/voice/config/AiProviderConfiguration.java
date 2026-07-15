@@ -20,7 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 @EnableConfigurationProperties(OpenAiProperties.class)
 @ConditionalOnProperty(prefix="voice.providers.openai",name="enabled",havingValue="true")
 public class AiProviderConfiguration {
-    @Bean SttClient sttClient(ObjectMapper mapper,OpenAiProperties p){return new OpenAiRealtimeSttClient(mapper,p.sttUrl(),p.apiKey(),p.sttModel(),p.sttLanguage(),p.sttSourceRate(),p.sttProviderRate());}
+    @Bean SttClient sttClient(ObjectMapper mapper,OpenAiProperties p){return new OpenAiRealtimeSttClient(mapper,p.sttUrl(),p.apiKey(),p.sttModel(),p.sttLanguage(),p.sttSourceRate(),p.sttProviderRate(),p.sttVadRmsThreshold(),p.sttMinimumSpeech(),p.sttEndSilence(),p.sttMaximumUtterance());}
     @Bean LlmClient llmClient(WebClient.Builder builder,ObjectMapper mapper,OpenAiProperties p){return new OpenAiResponsesLlmClient(builder,mapper,p.baseUrl(),p.apiKey(),p.llmModel(),p.llmTimeout());}
     @Bean TtsClient ttsClient(WebClient.Builder builder,OpenAiProperties p){return new OpenAiPcmTtsClient(builder,p.baseUrl(),p.apiKey(),p.ttsModel(),p.ttsVoice(),p.sttSourceRate(),p.ttsTimeout());}
     @Bean TurnCancellationRegistry turnCancellationRegistry(){return new TurnCancellationRegistry();}
