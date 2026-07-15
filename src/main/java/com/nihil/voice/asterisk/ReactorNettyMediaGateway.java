@@ -34,6 +34,7 @@ public final class ReactorNettyMediaGateway implements MediaGateway {
 
     public Mono<MediaConnection> connect(CallSession call) {
         return Mono.create(result -> {
+            log.info("Connecting Asterisk media WebSocket callId={} connectionId={}",call.internalCallId(),call.mediaConnectionId());
             var channel = new MediaChannel(properties.inboundBufferFrames(), meters);
             UUID initialTurn = call.currentTurnId() == null ? call.startTurn() : call.currentTurnId();
             channel.activate(initialTurn);
@@ -53,13 +54,15 @@ public final class ReactorNettyMediaGateway implements MediaGateway {
             };
 
             Mono<Void> socket = client.execute(properties.mediaUri(call.mediaConnectionId()), session -> {
+                log.info("Asterisk media WebSocket connected callId={} channelId={}",call.internalCallId(),call.mediaChannelId());
                 result.success(connection);
                 Mono<Void> receive = session.receive().doOnNext(message -> {
                     if (message.getType() == WebSocketMessage.Type.BINARY) {
                         DataBuffer buffer = message.getPayload();
                         byte[] bytes = new byte[buffer.readableByteCount()];
                         buffer.read(bytes);
-                        frames.incrementAndGet();
+                        long frameNumber=frames.incrementAndGet();
+                        if(frameNumber==1)log.info("First binary media frame received callId={} bytes={}",call.internalCallId(),bytes.length);
                         channel.acceptBinary(bytes);
                     } else if (message.getType() == WebSocketMessage.Type.TEXT) {
                         channel.acceptControl(message.getPayloadAsText());
