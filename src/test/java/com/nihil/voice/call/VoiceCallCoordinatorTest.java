@@ -51,6 +51,7 @@ class VoiceCallCoordinatorTest {
 
         StepVerifier.create(coordinator.run(call,media)).verifyComplete();
         assertThat(media.sent).hasSize(1);
+        assertThat(media.activations).isEqualTo(1);
         assertThat(recorded).containsExactly("USER:Salam","ASSISTANT:Salam!");
         assertThat(call.state()).isEqualTo(CallState.LISTENING);
     }
@@ -71,9 +72,10 @@ class VoiceCallCoordinatorTest {
     }
 
     private static final class RecordingMediaConnection implements MediaConnection {
-        final ArrayList<AudioFrame> sent=new ArrayList<>();int clears;
+        final ArrayList<AudioFrame> sent=new ArrayList<>();int clears;int activations;UUID activeTurn=UUID.randomUUID();
         public Flux<byte[]> inboundAudio(){return Flux.just(new byte[]{0,0});}
-        public boolean send(AudioFrame frame){sent.add(frame);return true;}
+        public boolean send(AudioFrame frame){if(!frame.turnId().equals(activeTurn))return false;sent.add(frame);return true;}
+        public void activateTurn(UUID turnId){activeTurn=turnId;activations++;}
         public void clearBuffer(UUID nextTurnId){clears++;}
         public Mono<Void> close(){return Mono.empty();}
     }

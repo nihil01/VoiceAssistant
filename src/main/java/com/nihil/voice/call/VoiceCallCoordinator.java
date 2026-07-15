@@ -23,6 +23,12 @@ public final class VoiceCallCoordinator {
         return switch(event.type()){
             case PARTIAL -> { logTranscript("PARTIAL",call,event); yield Mono.empty(); }
             case FINAL -> { logTranscript("FINAL",call,event); yield conversation.respond(call,event.text(),event.eventId())
+                .doOnSubscribe(ignored->{
+                    UUID turnId=call.currentTurnId();
+                    if(turnId==null)throw new IllegalStateException("Conversation started without an active turn");
+                    media.activateTurn(turnId);
+                    log.info("Activated Asterisk media output turn callId={} turnId={}",call.internalCallId(),turnId);
+                })
                 .handle((frame,sink)->{if(media.send(frame))sink.next(frame);else sink.error(new IllegalStateException("Asterisk media output queue rejected audio"));}).then(); }
             case SPEECH_STARTED -> interruptIfSpeaking(call,media);
             case ERROR -> Mono.error(new IllegalStateException("STT provider error: "+event.text()));

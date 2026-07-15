@@ -80,6 +80,7 @@ class AsteriskBridgeServiceTest {
             operations.add("connect");
             return Mono.just(new MediaConnection() {
                 public reactor.core.publisher.Flux<byte[]> inboundAudio() { return reactor.core.publisher.Flux.never(); }
+                public void activateTurn(java.util.UUID turnId) { operations.add("activateTurn"); }
                 public boolean send(com.nihil.voice.audio.AudioFrame frame) { return true; }
                 public void clearBuffer(java.util.UUID nextTurnId) { operations.add("clearBuffer"); }
                 public Mono<Void> close() { operations.add("closeMedia"); return Mono.empty(); }

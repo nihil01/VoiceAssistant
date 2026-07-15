@@ -7,6 +7,7 @@ import reactor.core.publisher.Mono;
 
 public interface MediaConnection {
     Flux<byte[]> inboundAudio();
+    void activateTurn(UUID turnId);
     boolean send(AudioFrame frame);
     void clearBuffer(UUID nextTurnId);
     Mono<Void> close();

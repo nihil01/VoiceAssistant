@@ -40,10 +40,17 @@ public final class ReactorNettyMediaGateway implements MediaGateway {
             channel.activate(initialTurn);
             var holder = new Disposable[1];
             AtomicLong frames = new AtomicLong();
+            AtomicLong outboundFrames = new AtomicLong();
             AtomicBoolean closed = new AtomicBoolean();
             MediaConnection connection = new MediaConnection() {
                 public Flux<byte[]> inboundAudio() { return channel.inboundAudio(); }
-                public boolean send(AudioFrame frame) { return channel.offer(frame.turnId(), frame.payload()); }
+                public void activateTurn(UUID turnId) { channel.activate(turnId); }
+                public boolean send(AudioFrame frame) {
+                    boolean accepted=channel.offer(frame.turnId(),frame.payload());
+                    if(accepted&&outboundFrames.incrementAndGet()==1)
+                        log.info("First binary media frame queued for Asterisk callId={} bytes={}",call.internalCallId(),frame.payload().length);
+                    return accepted;
+                }
                 public void clearBuffer(UUID nextTurnId) { channel.clearBuffer(nextTurnId); }
                 public Mono<Void> close() { return Mono.fromRunnable(() -> {
                     if (closed.compareAndSet(false, true)) {
