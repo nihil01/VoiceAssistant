@@ -23,7 +23,7 @@ public final class Pcm16Resampler {
             int right = Math.min(left + 1, sourceSamples - 1);
             double fraction = position - left;
             int value = (int)Math.round(samples[left] + (samples[right] - samples[left]) * fraction);
-            output.putShort((short)Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, value)));
+            output.putShort((short) Math.clamp(value, Short.MIN_VALUE, Short.MAX_VALUE));
         }
         return output.array();
     }

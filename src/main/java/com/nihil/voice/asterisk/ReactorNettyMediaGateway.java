@@ -29,7 +29,7 @@ public final class ReactorNettyMediaGateway implements MediaGateway {
         this(new ReactorNettyWebSocketClient(), properties, meters);
     }
     ReactorNettyMediaGateway(WebSocketClient client, AsteriskProperties properties, MeterRegistry meters) {
-        this.client = client; this.properties = properties; this.meters = meters;
+        this.client = client;this.properties = properties; this.meters = meters;
     }
 
     public Mono<MediaConnection> connect(CallSession call) {

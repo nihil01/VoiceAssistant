@@ -5,6 +5,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
+
+import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpHeaders;
 
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
@@ -48,13 +50,44 @@ public final class OpenAiRealtimeSttClient implements SttClient {
             sink.onCancel(subscription::dispose);sink.onDispose(subscription::dispose);
         });
     }
-    private String sessionUpdate() throws Exception {
-        var transcription=new java.util.LinkedHashMap<String,Object>();transcription.put("model",model);transcription.put("delay","low");
-        if(language!=null&&!language.isBlank())transcription.put("language",language);
-        Map<String,Object> input=Map.of("format",Map.of("type","audio/pcm","rate",providerRate),"transcription",transcription,
-            "turn_detection",Map.of("type","server_vad","silence_duration_ms",700,"prefix_padding_ms",300));
-        return mapper.writeValueAsString(Map.of("type","session.update","session",Map.of("type","transcription","audio",Map.of("input",input))));
+
+    private String sessionUpdate() {
+        Map<String, Object> input = getInput();
+
+        Map<String, Object> session = Map.of(
+                "type", "transcription",
+                "audio", Map.of(
+                        "input", input
+                )
+        );
+
+        return mapper.writeValueAsString(
+                Map.of(
+                        "type", "session.update",
+                        "session", session
+                )
+        );
     }
+
+    private @NonNull Map<String, Object> getInput() {
+        var transcription = new java.util.LinkedHashMap<String, Object>();
+
+        transcription.put("model", model);
+        transcription.put("delay", "low");
+
+        if (language != null && !language.isBlank()) {
+            transcription.put("language", language);
+        }
+
+        return Map.of(
+                "format", Map.of(
+                        "type", "audio/pcm",
+                        "rate", providerRate
+                ),
+                "transcription", transcription
+        );
+    }
+
     private String audioAppend(byte[] bytes){
         try{return mapper.writeValueAsString(Map.of("type","input_audio_buffer.append","audio",Base64.getEncoder().encodeToString(bytes)));}
         catch(Exception e){throw new IllegalArgumentException("Cannot encode STT audio",e);}
