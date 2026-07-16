@@ -25,5 +25,12 @@ public final class TurnCancellationRegistry {
         controls.computeIfPresent(callId, (ignored, control) -> control.turnId.equals(turnId) ? null : control);
     }
 
+    public void closeCall(UUID callId) {
+        TurnControl control = controls.remove(callId);
+        if (control != null) {
+            control.signal.tryEmitEmpty();
+        }
+    }
+
     private record TurnControl(UUID turnId, Sinks.Empty<Void> signal) {}
 }

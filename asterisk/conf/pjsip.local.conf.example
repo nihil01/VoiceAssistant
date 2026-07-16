@@ -1,0 +1,5 @@
+[ai-client-auth]
+type = auth
+auth_type = userpass
+username = ai-client
+password = CHANGE_ME

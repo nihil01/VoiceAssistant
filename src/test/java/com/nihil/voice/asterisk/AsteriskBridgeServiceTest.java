@@ -29,6 +29,33 @@ class AsteriskBridgeServiceTest {
     }
 
     @Test
+    void hangupWhileWaitingForMediaCancelsSetupAndCleansReadinessState() {
+        var calls = new CallSessionManager();
+        var operations = new ArrayList<String>();
+        var service = new AsteriskBridgeService(
+                new RecordingAriGateway(operations),
+                new RecordingMediaGateway(operations),
+                calls,
+                com.nihil.voice.call.CallLifecycleObserver.NOOP,
+                Duration.ofSeconds(5)
+        );
+
+        Mono<CallSession> setup = service.startCaller(
+                new AriChannel("caller-race", "PJSIP/700-3", "+9943", "700")
+        );
+        StepVerifier.create(setup)
+                .then(() -> service.cleanupByChannel(
+                        "caller-race",
+                        "CHANNEL_DESTROYED"
+                ).block())
+                .expectError(AriException.class)
+                .verify();
+
+        assertThat(operations).doesNotContain("add:media-1");
+        assertThat(calls.activeCount()).isZero();
+    }
+
+    @Test
     void mediaIsAddedOnlyAfterItsStasisStartAndCleanupIsOrderedAndIdempotent() {
         var calls = new CallSessionManager();
         var operations = new ArrayList<String>();

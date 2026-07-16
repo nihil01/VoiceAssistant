@@ -13,15 +13,16 @@ public final class R2dbcCallStore implements ReactiveCallStore {
 
     @Override public Mono<Void> create(CallSession call, UUID tenantId, UUID assistantId) {
         var spec = db.sql("""
-            insert into calls(id, tenant_id, assistant_id, external_call_id, asterisk_channel_id, bridge_id,
-                              caller_number, destination_number, status, started_at)
-            values(:id, :tenant, :assistant, :external, :channel, :bridge, :caller, :destination, :status, :started)
+            insert into calls(id, tenant_id, assistant_id, external_call_id, asterisk_channel_id,
+                              media_channel_id, bridge_id, caller_number, destination_number, status, started_at)
+            values(:id, :tenant, :assistant, :external, :channel, :media, :bridge, :caller, :destination, :status, :started)
             on conflict (external_call_id) do nothing
             """)
             .bind("id", call.internalCallId()).bind("external", call.asteriskChannelId())
             .bind("channel", call.asteriskChannelId()).bind("status", call.state().name()).bind("started", call.startedAt());
         spec = bindNullable(spec, "tenant", tenantId, UUID.class);
         spec = bindNullable(spec, "assistant", assistantId, UUID.class);
+        spec = bindNullable(spec, "media", call.mediaChannelId(), String.class);
         spec = bindNullable(spec, "bridge", call.bridgeId(), String.class);
         spec = bindNullable(spec, "caller", call.callerNumber(), String.class);
         spec = bindNullable(spec, "destination", call.destinationNumber(), String.class);

@@ -1,0 +1,11 @@
+target
+.git
+.idea
+*.iml
+.env
+*.env*
+**/__pycache__
+**/*.py[cod]
+asterisk/credentials.txt
+asterisk/conf/*.local.conf
+asterisk/var

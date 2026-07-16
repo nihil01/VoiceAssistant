@@ -20,6 +20,7 @@ public final class AsteriskBridgeService {
     private final com.nihil.voice.call.CallLifecycleObserver lifecycle;
     private final Duration mediaReadyTimeout;
     private final ConcurrentMap<String, Sinks.One<Void>> mediaReady = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, String> mediaReadinessKeys = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, MediaConnection> connections = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, AtomicBoolean> cleanup = new ConcurrentHashMap<>();
 
@@ -42,6 +43,7 @@ public final class AsteriskBridgeService {
             String requestedMediaId = "media-" + UUID.randomUUID();
             Sinks.One<Void> ready = Sinks.one();
             mediaReady.put(requestedMediaId, ready);
+            mediaReadinessKeys.put(call.internalCallId(), requestedMediaId);
             return Mono.defer(() -> ari.answer(caller.id()))
                 .then(Mono.fromRunnable(() -> call.transitionTo(CallState.ANSWERED)))
                 .then(Mono.defer(() -> ari.createBridge(bridgeId, "ai-agent-" + call.internalCallId())))
@@ -52,6 +54,7 @@ public final class AsteriskBridgeService {
                     if (!requestedMediaId.equals(external.id())) {
                         mediaReady.remove(requestedMediaId, ready);
                         mediaReady.put(external.id(), ready);
+                        mediaReadinessKeys.put(call.internalCallId(), external.id());
                     }
                     return Mono.defer(() -> ari.channelVariable(external.id(), CONNECTION_VARIABLE))
                         .doOnNext(connectionId -> calls.bindMedia(call.internalCallId(), external.id(), connectionId));
@@ -63,6 +66,7 @@ public final class AsteriskBridgeService {
                 .then(Mono.defer(() -> {
                     call.transitionTo(CallState.LISTENING);
                     mediaReady.remove(call.mediaChannelId(), ready);
+                    mediaReadinessKeys.remove(call.internalCallId());
                     return lifecycle.onReady(call, connections.get(call.internalCallId())).thenReturn(call);
                 }))
                 .onErrorResume(error -> cleanup(call, "setup_failed").then(Mono.error(error)));
@@ -82,22 +86,32 @@ public final class AsteriskBridgeService {
         AtomicBoolean guard = cleanup.computeIfAbsent(call.internalCallId(), ignored -> new AtomicBoolean());
         if (!guard.compareAndSet(false, true)) return Mono.empty();
         if (!call.state().terminal() && call.state() != CallState.ENDING) call.transitionTo(CallState.ENDING);
-        mediaReady.computeIfPresent(call.mediaChannelId() == null ? "" : call.mediaChannelId(), (id, ready) -> {
-            ready.tryEmitError(new AriException("Call ended during media setup: " + reason));
-            return null;
-        });
+        String readinessKey = mediaReadinessKeys.remove(call.internalCallId());
+        if (readinessKey != null) {
+            mediaReady.computeIfPresent(readinessKey, (id, ready) -> {
+                ready.tryEmitError(new AriException("Call ended during media setup: " + reason));
+                return null;
+            });
+        }
         MediaConnection connection = connections.remove(call.internalCallId());
         Mono<Void> closeMedia = connection == null ? Mono.empty() : connection.close().onErrorResume(error -> Mono.empty());
         Mono<Void> deleteMedia = call.mediaChannelId() == null ? Mono.empty()
             : ari.deleteChannel(call.mediaChannelId()).onErrorResume(error -> Mono.empty());
         Mono<Void> deleteBridge = call.bridgeId() == null ? Mono.empty()
             : ari.deleteBridge(call.bridgeId()).onErrorResume(error -> Mono.empty());
-        return lifecycle.onEnding(call, reason).onErrorResume(error -> Mono.empty()).then(closeMedia).then(deleteMedia).then(deleteBridge)
-            .then(Mono.fromRunnable(() -> {
+        return lifecycle.onEnding(call, reason)
+            .materialize()
+            .flatMap(lifecycleSignal -> closeMedia
+                .then(deleteMedia)
+                .then(deleteBridge)
+                .then(Mono.defer(() -> lifecycleSignal.isOnError()
+                    ? Mono.<Void>error(lifecycleSignal.getThrowable())
+                    : Mono.empty())))
+            .doFinally(ignored -> {
                 if (call.state() == CallState.ENDING) call.transitionTo(CallState.ENDED);
                 calls.remove(call.internalCallId());
                 cleanup.remove(call.internalCallId(), guard);
-            }));
+            });
     }
 
     public MediaConnection connection(CallSession call) { return connections.get(call.internalCallId()); }

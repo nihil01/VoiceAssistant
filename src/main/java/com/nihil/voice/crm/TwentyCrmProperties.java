@@ -1,13 +1,36 @@
 package com.nihil.voice.crm;
 
-@org.springframework.boot.context.properties.ConfigurationProperties("voice.twenty")
-public record TwentyCrmProperties(String baseUrl, String apiKey, String peoplePath, String aiCallsPath,
-                                  String notesPath, String tasksPath) {
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@ConfigurationProperties("voice.twenty")
+public record TwentyCrmProperties(
+        String baseUrl,
+        String apiKey,
+        String peoplePath,
+        String aiCallsPath,
+        String callRecordingsPath,
+        String voicePromptsPath,
+        String notesPath,
+        String noteTargetsPath,
+        String tasksPath,
+        String taskTargetsPath
+) {
     public TwentyCrmProperties {
-        peoplePath = defaultPath(peoplePath, "/rest/people");
-        aiCallsPath = defaultPath(aiCallsPath, "/rest/aiCalls");
-        notesPath = defaultPath(notesPath, "/rest/notes");
-        tasksPath = defaultPath(tasksPath, "/rest/tasks");
+        baseUrl = defaultValue(baseUrl, "http://twenty-server:3000");
+        peoplePath = defaultValue(peoplePath, "/rest/people");
+        aiCallsPath = defaultValue(aiCallsPath, "/rest/aiCalls");
+        callRecordingsPath = defaultValue(
+                callRecordingsPath,
+                "/rest/callRecordings"
+        );
+        voicePromptsPath = defaultValue(voicePromptsPath, "/rest/voicePrompts");
+        notesPath = defaultValue(notesPath, "/rest/notes");
+        noteTargetsPath = defaultValue(noteTargetsPath, "/rest/noteTargets");
+        tasksPath = defaultValue(tasksPath, "/rest/tasks");
+        taskTargetsPath = defaultValue(taskTargetsPath, "/rest/taskTargets");
     }
-    private static String defaultPath(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
+
+    private static String defaultValue(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
 }

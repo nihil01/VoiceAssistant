@@ -31,16 +31,60 @@ docker run --rm \
   mvn clean verify
 ```
 
-## Local infrastructure
+## Local stack
+
+The Compose stack contains:
+
+- Asterisk with ARI and `chan_websocket` media;
+- voice-agent service;
+- voice-agent PostgreSQL and Redis;
+- Twenty server and worker;
+- isolated Twenty PostgreSQL and Redis.
 
 ```bash
 cp .env.example .env
-# Fill secrets only in .env or a secret manager.
+# Fill OpenAI, ARI and Twenty credentials only in .env or a secret manager.
 docker compose up -d --build
 curl -fsS http://127.0.0.1:8091/actuator/health/readiness
+curl -fsS http://127.0.0.1:3000/healthz
 ```
 
-PostgreSQL and Redis are started by Compose. Flyway runs before the application becomes ready.
+Only Asterisk telephony/ARI ports, the loopback-bound voice-agent actuator port, and
+the loopback-bound Twenty UI/API port are published. Both PostgreSQL and Redis pairs
+remain internal. Flyway runs before the voice agent becomes ready.
+
+The Asterisk image contains no `wget`; its Compose healthcheck intentionally uses
+`asterisk -rx 'core show uptime'`.
+
+## Twenty bootstrap
+
+Twenty is pinned in Compose. Complete its first-run workspace setup at
+`http://127.0.0.1:3000`, create a least-privilege API key in **Settings → API & Webhooks**,
+and set:
+
+```dotenv
+TWENTY_ENABLED=true
+TWENTY_BASE_URL=http://twenty-server:3000
+TWENTY_API_KEY=...
+```
+
+Create or reconcile the custom `aiCall`, `callRecording`, and `voicePrompt` objects:
+
+```bash
+TWENTY_BASE_URL=http://127.0.0.1:3000 \
+TWENTY_API_KEY='...' \
+python3 scripts/bootstrap_twenty_schema.py
+```
+
+The bootstrap is idempotent. Validate its behavior without a live workspace:
+
+```bash
+python3 scripts/test_bootstrap_twenty_schema.py
+```
+
+`Note` and `Task` remain standard Twenty objects. The integration links them to a
+person through `/rest/noteTargets` and `/rest/taskTargets`; it does not add fake
+`personId` fields to standard objects.
 
 ## Required external configuration
 

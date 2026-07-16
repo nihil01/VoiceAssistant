@@ -1,0 +1,6 @@
+[ai-manager]
+secret = CHANGE_ME
+read = all
+write = all
+deny = 0.0.0.0/0.0.0.0
+permit = 127.0.0.1/255.255.255.255

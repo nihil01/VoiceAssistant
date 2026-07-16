@@ -1,0 +1,5 @@
+[ai-ari]
+type = user
+read_only = no
+password = CHANGE_ME
+password_format = plain

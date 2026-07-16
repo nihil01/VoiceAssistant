@@ -78,6 +78,8 @@ voice:
       tts-model: ${TTS_MODEL:gpt-4o-mini-tts}
       tts-voice: ${TTS_VOICE:alloy}
       tts-timeout: ${TTS_TIMEOUT:20s}
+      llm-system-prompt: ${LLM_SYSTEM_PROMPT:}
+      tts-instructions: ${TTS_INSTRUCTIONS:}
     tts:
       enabled: ${TTS_ENABLED:false}
       base-url: ${TTS_BASE_URL:}

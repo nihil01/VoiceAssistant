@@ -41,7 +41,11 @@ public final class AriEventStream {
                     .map(WebSocketMessage::getPayloadAsText)
                     .doOnNext(raw -> parser.parse(raw).ifPresent(emitter::next))
                     .then()
-            ).subscribe(ignored -> { }, emitter::error, emitter::complete);
+            ).subscribe(
+                ignored -> { },
+                emitter::error,
+                () -> emitter.error(new AriException("ARI event WebSocket closed"))
+            );
             emitter.onDispose(connection);
             });
         }).doOnError(error -> log.warn("ARI event WebSocket failed host={} app={} error={}",

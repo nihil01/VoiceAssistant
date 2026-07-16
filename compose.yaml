@@ -26,43 +26,68 @@ services:
       retries: 20
     restart: unless-stopped
 
+  asterisk:
+    image: andrius/asterisk:latest
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "10000-10100:10000-10100/udp"
+      - "127.0.0.1:5038:5038/tcp"
+      - "127.0.0.1:8088:8088/tcp"
+    volumes:
+      - ./asterisk/conf:/etc/asterisk
+      - ./asterisk/var/log:/var/log/asterisk
+      - ./asterisk/var/spool:/var/spool/asterisk
+    healthcheck:
+      test: ["CMD-SHELL", "asterisk -rx 'core show uptime' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
   voice-agent:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       R2DBC_URL: r2dbc:postgresql://postgres:5432/voice_agent
       JDBC_URL: jdbc:postgresql://postgres:5432/voice_agent
       DB_USERNAME: voice_agent
       DB_PASSWORD: ${DB_PASSWORD:-voice_agent_dev_only}
       REDIS_HOST: redis
+      REDIS_PORT: 6379
+
       ASTERISK_ENABLED: ${ASTERISK_ENABLED:-false}
-      ASTERISK_BASE_URL: ${ASTERISK_BASE_URL:-http://host.docker.internal:8088}
+      ASTERISK_BASE_URL: ${ASTERISK_BASE_URL:-http://asterisk:8088}
+      ASTERISK_MEDIA_WS_BASE_URL: ${ASTERISK_MEDIA_WS_BASE_URL:-ws://asterisk:8088/media}
       ARI_USERNAME: ${ARI_USERNAME:-}
       ARI_PASSWORD: ${ARI_PASSWORD:-}
       ARI_APP: ${ARI_APP:-ai-agent}
       MEDIA_FORMAT: ${MEDIA_FORMAT:-slin16}
       MEDIA_DIRECTION: ${MEDIA_DIRECTION:-both}
-      ASTERISK_MEDIA_WS_BASE_URL: ${ASTERISK_MEDIA_WS_BASE_URL:-ws://host.docker.internal:8088/media}
+
       OPENAI_ENABLED: ${OPENAI_ENABLED:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       STT_MODEL: ${STT_MODEL:-gpt-realtime-whisper}
-      STT_LANGUAGE: ${STT_LANGUAGE:-}
+      STT_LANGUAGE: ${STT_LANGUAGE:-az}
       STT_SAMPLE_RATE: ${STT_SAMPLE_RATE:-24000}
       STT_VAD_RMS_THRESHOLD: ${STT_VAD_RMS_THRESHOLD:-400}
       STT_MINIMUM_SPEECH: ${STT_MINIMUM_SPEECH:-100ms}
-      STT_END_SILENCE: ${STT_END_SILENCE:-600ms}
+      STT_END_SILENCE: ${STT_END_SILENCE:-450ms}
       STT_MAXIMUM_UTTERANCE: ${STT_MAXIMUM_UTTERANCE:-15s}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4.1-mini}
-      TTS_MODEL: ${TTS_MODEL:-gpt-4o-mini-tts}
-      TTS_VOICE: ${TTS_VOICE:-alloy}
       LOG_TRANSCRIPTS: ${LOG_TRANSCRIPTS:-false}
-      TTS_ENABLED: ${TTS_ENABLED:-false}
-      TTS_BASE_URL: ${TTS_BASE_URL:-}
-      TTS_API_KEY: ${TTS_API_KEY:-}
+
+      LLM_MODEL: ${LLM_MODEL:-gpt-4.1-mini}
+      LLM_SYSTEM_PROMPT: ${LLM_SYSTEM_PROMPT:-Sən Azərbaycan dilində danışan peşəkar səsli köməkçi Leylasan. İstifadəçi rus və ya ingilis dilində danışsa, onun dilində cavab ver. Cavabları qısa, təbii və telefon danışığına uyğun saxla. Markdown və uzun siyahılar istifadə etmə. İlk cümlədə birbaşa cavaba keç.}
+
+      TTS_MODEL: ${TTS_MODEL:-gpt-4o-mini-tts}
+      TTS_VOICE: ${TTS_VOICE:-marin}
+      TTS_INSTRUCTIONS: ${TTS_INSTRUCTIONS:-Speak naturally in Azerbaijani with clear pronunciation, a warm professional tone, moderate speed, and short pauses.}
+
       TWENTY_ENABLED: ${TWENTY_ENABLED:-false}
-      TWENTY_BASE_URL: ${TWENTY_BASE_URL:-}
+      TWENTY_BASE_URL: ${TWENTY_BASE_URL:-http://twenty-server:3000}
       TWENTY_API_KEY: ${TWENTY_API_KEY:-}
-    extra_hosts:
-      - host.docker.internal:host-gateway
     ports:
       - "127.0.0.1:${VOICE_AGENT_PORT:-8091}:8080"
     depends_on:
@@ -70,13 +95,89 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      asterisk:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health/readiness"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health/readiness || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  twenty-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: default
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${TWENTY_DB_PASSWORD}
+    volumes:
+      - twenty-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d default"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  twenty-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  twenty-server:
+    image: twentycrm/twenty:${TWENTY_TAG:-v2.21.0}
+    environment: &twenty-environment
+      NODE_PORT: 3000
+      PG_DATABASE_URL: postgres://postgres:${TWENTY_DB_PASSWORD}@twenty-db:5432/default
+      SERVER_URL: ${TWENTY_SERVER_URL:-http://localhost:3000}
+      REDIS_URL: redis://twenty-redis:6379
+      STORAGE_TYPE: local
+      ENCRYPTION_KEY: ${TWENTY_ENCRYPTION_KEY}
+      DISABLE_DB_MIGRATIONS: "false"
+      DISABLE_CRON_JOBS_REGISTRATION: "false"
+    volumes:
+      - twenty-server-data:/app/packages/twenty-server/.local-storage
+    ports:
+      - "127.0.0.1:${TWENTY_PORT:-3000}:3000"
+    depends_on:
+      twenty-db:
+        condition: service_healthy
+      twenty-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://127.0.0.1:3000/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
+
+  twenty-worker:
+    image: twentycrm/twenty:${TWENTY_TAG:-v2.21.0}
+    command: ["yarn", "worker:prod"]
+    environment:
+      <<: *twenty-environment
+      DISABLE_DB_MIGRATIONS: "true"
+      DISABLE_CRON_JOBS_REGISTRATION: "true"
+    volumes:
+      - twenty-server-data:/app/packages/twenty-server/.local-storage
+    depends_on:
+      twenty-db:
+        condition: service_healthy
+      twenty-redis:
+        condition: service_healthy
+      twenty-server:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   voice-postgres:
   voice-redis:
+  twenty-db:
+  twenty-server-data:
