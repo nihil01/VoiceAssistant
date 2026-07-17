@@ -57,7 +57,9 @@ public final class VoiceCallCoordinator {
 
     public Mono<Void> run(CallSession call, MediaConnection media) {
         return stt.transcribe(media.inboundAudio())
-                .concatMap(event -> handle(call, media, event), 1)
+                // Do not queue VAD behind a multi-second response: barge-in must
+                // cancel playback while assistant audio is still streaming.
+                .flatMap(event -> handle(call, media, event), 8)
                 .then();
     }
 
@@ -69,10 +71,10 @@ public final class VoiceCallCoordinator {
         return switch (event.type()) {
             case PARTIAL -> {
                 logTranscript("PARTIAL", call, event);
-                yield Mono.empty();
+                yield interruptIfResponding(call, media);
             }
             case FINAL -> handleFinalTranscript(call, media, event);
-            case SPEECH_STARTED -> interruptIfSpeaking(call, media);
+            case SPEECH_STARTED -> interruptIfResponding(call, media);
             case ERROR -> Mono.error(
                     new IllegalStateException("STT provider error: " + event.text())
             );
@@ -168,15 +170,23 @@ public final class VoiceCallCoordinator {
         );
     }
 
-    private Mono<Void> interruptIfSpeaking(CallSession call, MediaConnection media) {
-        if (call.state() != CallState.SPEAKING) {
+    private Mono<Void> interruptIfResponding(CallSession call, MediaConnection media) {
+        if (call.state() != CallState.SPEAKING && call.state() != CallState.THINKING) {
             return Mono.empty();
         }
 
         UUID interruptedTurn = call.currentTurnId();
-        cancellations.cancel(call.internalCallId(), interruptedTurn);
+        // Invalidate the turn before signalling Reactor cancellation. Cancellation
+        // completes synchronously and its completion hook would otherwise race this
+        // transition and move the call back to LISTENING first.
         UUID replacementTurn = call.interruptAndStartListening();
+        cancellations.cancel(call.internalCallId(), interruptedTurn);
         media.clearBuffer(replacementTurn);
+        meters.counter("voice.turn.barge_in").increment();
+        log.info(
+                "Caller interrupted voice response callId={} interruptedTurn={} replacementTurn={}",
+                call.internalCallId(), interruptedTurn, replacementTurn
+        );
         return Mono.empty();
     }
 }

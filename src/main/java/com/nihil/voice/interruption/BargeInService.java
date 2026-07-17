@@ -19,8 +19,8 @@ public final class BargeInService {
     public Mono<UUID> interrupt(CallSession call, TurnAwareAudioOutputQueue output) {
         if (call.state() != CallState.SPEAKING) return Mono.empty();
         UUID previousTurn = call.currentTurnId();
-        cancellations.cancel(call.internalCallId(), previousTurn);
         UUID newTurn = call.interruptAndStartListening();
+        cancellations.cancel(call.internalCallId(), previousTurn);
         output.activate(newTurn);
         return mediaBuffer.clear(call).thenReturn(newTurn);
     }

@@ -6,6 +6,9 @@ import com.nihil.voice.call.CallState;
 import com.nihil.voice.call.ConversationMessageSink;
 import com.nihil.voice.llm.ConversationMessage;
 import com.nihil.voice.llm.LlmClient;
+import com.nihil.voice.knowledge.KnowledgeRetriever;
+import java.util.ArrayList;
+import java.util.List;
 import com.nihil.voice.tts.TtsClient;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +26,7 @@ public final class ConversationService {
     private final TtsClient tts;
     private final TurnCancellationRegistry cancellations;
     private final ConversationMessageSink messages;
+    private final KnowledgeRetriever knowledge;
     private final ConcurrentMap<UUID, Set<String>> processedEvents = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, ConversationHistory> histories = new ConcurrentHashMap<>();
 
@@ -31,7 +35,7 @@ public final class ConversationService {
             TtsClient tts,
             TurnCancellationRegistry cancellations
     ) {
-        this(llm, tts, cancellations, ConversationMessageSink.NOOP);
+        this(llm, tts, cancellations, ConversationMessageSink.NOOP, KnowledgeRetriever.NOOP);
     }
 
     public ConversationService(
@@ -40,10 +44,21 @@ public final class ConversationService {
             TurnCancellationRegistry cancellations,
             ConversationMessageSink messages
     ) {
+        this(llm, tts, cancellations, messages, KnowledgeRetriever.NOOP);
+    }
+
+    public ConversationService(
+            LlmClient llm,
+            TtsClient tts,
+            TurnCancellationRegistry cancellations,
+            ConversationMessageSink messages,
+            KnowledgeRetriever knowledge
+    ) {
         this.llm = llm;
         this.tts = tts;
         this.cancellations = cancellations;
         this.messages = messages;
+        this.knowledge = knowledge == null ? KnowledgeRetriever.NOOP : knowledge;
     }
 
     public Flux<AudioFrame> respond(
@@ -90,7 +105,7 @@ public final class ConversationService {
         Mono<Void> cancellation = cancellations.register(call.internalCallId(), turnId);
         Flux<AudioFrame> response = messages
                 .record(call, ConversationMessage.Role.USER, transcript, providerEventId, turnId)
-                .thenMany(streamAssistantAudio(call, history, turnId));
+                .thenMany(streamAssistantAudio(call, history, turnId, transcript));
 
         return response
                 .takeUntilOther(cancellation)
@@ -102,12 +117,16 @@ public final class ConversationService {
     private Flux<AudioFrame> streamAssistantAudio(
             CallSession call,
             ConversationHistory history,
-            UUID turnId
+            UUID turnId,
+            String userText
     ) {
         var generatedText = new StringBuilder();
         var chunker = new StreamingTextChunker();
 
-        Flux<String> phrases = llm.stream(history.snapshot())
+        Flux<String> phrases = knowledge.retrieve(userText)
+                .onErrorReturn("")
+                .defaultIfEmpty("")
+                .flatMapMany(context -> llm.stream(withKnowledge(history.snapshot(), context)))
                 .doOnNext(generatedText::append)
                 .concatMap(delta -> Flux.fromIterable(chunker.append(delta)), LLM_PREFETCH)
                 .concatWith(Flux.defer(() -> Flux.fromIterable(chunker.finish())));
@@ -133,6 +152,27 @@ public final class ConversationService {
         });
 
         return frames.concatWith(persistAssistantMessage.thenMany(Flux.empty()));
+    }
+
+    private static List<ConversationMessage> withKnowledge(
+            List<ConversationMessage> history,
+            String context
+    ) {
+        if (context == null || context.isBlank()) {
+            return history;
+        }
+        var messages = new ArrayList<ConversationMessage>(history.size() + 1);
+        messages.add(new ConversationMessage(
+                ConversationMessage.Role.SYSTEM,
+                """
+                Фактическая база знаний компании приведена ниже. Используй её для конкретных ответов.
+                Не придумывай факты, которых в базе нет. Если ответа нет, честно предложи уточнить у менеджера.
+
+                БАЗА ЗНАНИЙ:
+                """ + context
+        ));
+        messages.addAll(history);
+        return List.copyOf(messages);
     }
 
     private boolean isDuplicate(CallSession call, String providerEventId) {

@@ -5,6 +5,8 @@ import com.nihil.voice.conversation.ConversationService;
 import com.nihil.voice.conversation.TurnCancellationRegistry;
 import com.nihil.voice.llm.LlmClient;
 import com.nihil.voice.llm.OpenAiResponsesLlmClient;
+import com.nihil.voice.knowledge.KnowledgeRetriever;
+import org.springframework.beans.factory.ObjectProvider;
 import com.nihil.voice.stt.OpenAiRealtimeSttClient;
 import com.nihil.voice.stt.SttClient;
 import com.nihil.voice.tts.OpenAiPcmTtsClient;
@@ -85,8 +87,10 @@ public class AiProviderConfiguration {
             LlmClient llm,
             TtsClient tts,
             TurnCancellationRegistry cancellations,
-            ConversationMessageSink messages
+            ConversationMessageSink messages,
+            ObjectProvider<KnowledgeRetriever> knowledge
     ) {
-        return new ConversationService(llm, tts, cancellations, messages);
+        return new ConversationService(llm, tts, cancellations, messages,
+                knowledge.getIfAvailable(() -> KnowledgeRetriever.NOOP));
     }
 }

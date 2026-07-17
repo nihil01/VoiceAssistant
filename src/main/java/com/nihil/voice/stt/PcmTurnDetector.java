@@ -11,6 +11,7 @@ final class PcmTurnDetector {
     private long speechCandidateMs;
     private long silenceMs;
     private long utteranceMs;
+    private boolean speechStarted;
 
     PcmTurnDetector(int sampleRate,double rmsThreshold,long minimumSpeechMs,long endSilenceMs,long maximumUtteranceMs){
         if(sampleRate<=0||rmsThreshold<0||minimumSpeechMs<=0||endSilenceMs<=0||maximumUtteranceMs<=0)
@@ -20,12 +21,13 @@ final class PcmTurnDetector {
     }
 
     boolean accept(byte[] pcm16le){
+        speechStarted=false;
         long frameMs=Math.max(1,(pcm16le.length/2L)*1000L/sampleRate);
         boolean voiced=rms(pcm16le)>=rmsThreshold;
         if(!speaking){
             speechCandidateMs=voiced?speechCandidateMs+frameMs:0;
             if(speechCandidateMs<minimumSpeechMs)return false;
-            speaking=true;utteranceMs=speechCandidateMs;silenceMs=0;
+            speaking=true;speechStarted=true;utteranceMs=speechCandidateMs;silenceMs=0;
             return utteranceMs>=maximumUtteranceMs&&commit();
         }
         utteranceMs+=frameMs;
@@ -35,6 +37,7 @@ final class PcmTurnDetector {
     }
 
     boolean hasSpeech(){return speaking||speechCandidateMs>=minimumSpeechMs;}
+    boolean speechStarted(){return speechStarted;}
 
     private boolean commit(){reset();return true;}
     private void reset(){speaking=false;speechCandidateMs=0;silenceMs=0;utteranceMs=0;}

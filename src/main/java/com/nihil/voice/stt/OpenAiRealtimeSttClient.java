@@ -60,6 +60,7 @@ public final class OpenAiRealtimeSttClient implements SttClient {
             PcmTurnDetector turns=new PcmTurnDetector(sourceRate,vadRmsThreshold,minimumSpeech.toMillis(),endSilence.toMillis(),maximumUtterance.toMillis());
             AtomicLong frames=new AtomicLong();
             AtomicLong commits=new AtomicLong();
+            AtomicLong utterances=new AtomicLong();
             Mono<Void> socket=client.execute(uri,headers,session->{
                 log.info("OpenAI Realtime STT WebSocket connected model={} sourceRate={} providerRate={}",model,sourceRate,providerRate);
                 Flux<WebSocketMessage> messages=Flux.concat(
@@ -69,6 +70,11 @@ public final class OpenAiRealtimeSttClient implements SttClient {
                     }),
                     audio.publishOn(Schedulers.parallel()).concatMap(source->{
                         boolean commit=turns.accept(source);
+                        if(turns.speechStarted()){
+                            long utterance=utterances.incrementAndGet();
+                            log.debug("Local VAD detected speech start utterance={}",utterance);
+                            sink.next(new SttEvent(SttEvent.Type.SPEECH_STARTED,"local-vad-"+utterance,null,null,null));
+                        }
                         byte[] provider=sourceRate==providerRate?source:Pcm16Resampler.resampleMono(source,sourceRate,providerRate);
                         var output=new ArrayList<WebSocketMessage>(2);
                         output.add(session.textMessage(audioAppend(provider)));

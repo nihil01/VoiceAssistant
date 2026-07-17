@@ -50,6 +50,7 @@ public final class R2dbcCrmSyncJobStore implements CrmSyncJobStore {
                    calls.recording_url,
                    coalesce(summary.short_summary, 'Call completed') as short_summary,
                    summary.full_summary,
+                   summary.topic,
                    summary.intent,
                    summary.sentiment,
                    summary.lead_quality,
@@ -85,6 +86,7 @@ public final class R2dbcCrmSyncJobStore implements CrmSyncJobStore {
                     var summary = new CallSummary(
                             row.get("short_summary", String.class),
                             row.get("full_summary", String.class),
+                            row.get("topic", String.class),
                             row.get("intent", String.class),
                             row.get("sentiment", String.class),
                             row.get("lead_quality", String.class),

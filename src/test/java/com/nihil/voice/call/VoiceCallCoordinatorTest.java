@@ -71,6 +71,30 @@ class VoiceCallCoordinatorTest {
         assertThat(call.currentTurnId()).isNotEqualTo(turn);
     }
 
+    @Test void processesSpeechStartedWhileAssistantAudioIsStillStreaming() {
+        var call=CallSession.create(UUID.randomUUID(),"caller",null,null);
+        call.transitionTo(CallState.ANSWERED);call.transitionTo(CallState.LISTENING);
+        SttClient stt=audio->Flux.concat(
+            Flux.just(new SttEvent(SttEvent.Type.FINAL,"event-final","Salam",null,null)),
+            Mono.delay(java.time.Duration.ofMillis(50))
+                .map(ignored->new SttEvent(SttEvent.Type.SPEECH_STARTED,"local-vad-1",null,null,null))
+        );
+        var cancellations=new TurnCancellationRegistry();
+        var conversation=new ConversationService(
+            messages->Flux.just("Uzun cavab."),
+            text->Flux.concat(Flux.just(new byte[]{1,2}),Flux.never()),
+            cancellations
+        );
+        var media=new RecordingMediaConnection();
+
+        StepVerifier.create(new VoiceCallCoordinator(stt,conversation,cancellations).run(call,media))
+            .expectComplete().verify(java.time.Duration.ofSeconds(2));
+
+        assertThat(media.sent).hasSize(1);
+        assertThat(media.clears).isEqualTo(1);
+        assertThat(call.state()).isEqualTo(CallState.LISTENING);
+    }
+
     private static final class RecordingMediaConnection implements MediaConnection {
         final ArrayList<AudioFrame> sent=new ArrayList<>();int clears;int activations;UUID activeTurn=UUID.randomUUID();
         public Flux<byte[]> inboundAudio(){return Flux.just(new byte[]{0,0});}

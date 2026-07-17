@@ -96,8 +96,27 @@ class BootstrapTwentySchemaTest(unittest.TestCase):
 
             self.assertEqual(posts_after_first_run, FakeTwentyHandler.posts)
             self.assertEqual(
-                {"note", "task", "aiCall", "callRecording", "voicePrompt"},
+                {
+                    "note",
+                    "task",
+                    "aiCall",
+                    "callRecording",
+                    "voicePrompt",
+                    "knowledgeBaseEntry",
+                },
                 set(FakeTwentyHandler.objects),
+            )
+            self.assertIn("topic", FakeTwentyHandler.fields["aiCall-id"])
+            self.assertEqual(
+                {
+                    "title",
+                    "content",
+                    "category",
+                    "sourceUrl",
+                    "active",
+                    "externalKnowledgeId",
+                },
+                set(FakeTwentyHandler.fields["knowledgeBaseEntry-id"]),
             )
         finally:
             server.shutdown()

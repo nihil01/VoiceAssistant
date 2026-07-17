@@ -88,3 +88,13 @@ voice:
     enabled: ${TWENTY_ENABLED:false}
     base-url: ${TWENTY_BASE_URL:}
     api-key: ${TWENTY_API_KEY:}
+  knowledge:
+    enabled: ${KNOWLEDGE_ENABLED:true}
+    tenant-id: ${KNOWLEDGE_TENANT_ID:00000000-0000-0000-0000-000000000001}
+    embedding-model: ${EMBEDDING_MODEL:text-embedding-3-small}
+    embedding-dimensions: ${EMBEDDING_DIMENSIONS:1536}
+    embedding-timeout: ${EMBEDDING_TIMEOUT:5s}
+    maximum-results: ${KNOWLEDGE_MAXIMUM_RESULTS:4}
+    maximum-distance: ${KNOWLEDGE_MAXIMUM_DISTANCE:0.55}
+    sync-initial-delay: ${KNOWLEDGE_SYNC_INITIAL_DELAY:5s}
+    sync-delay: ${KNOWLEDGE_SYNC_DELAY:30s}

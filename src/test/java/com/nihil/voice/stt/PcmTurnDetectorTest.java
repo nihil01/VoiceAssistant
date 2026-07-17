@@ -18,6 +18,9 @@ class PcmTurnDetectorTest {
         assertThat(detector.accept(speech)).isFalse();
         assertThat(detector.accept(speech)).isFalse();
         assertThat(detector.accept(speech)).isFalse(); // speech confirmed at 60 ms
+        assertThat(detector.speechStarted()).isTrue();
+        assertThat(detector.accept(speech)).isFalse();
+        assertThat(detector.speechStarted()).isFalse();
         for(int i=0;i<9;i++)assertThat(detector.accept(silence)).isFalse();
         assertThat(detector.accept(silence)).isTrue(); // 200 ms silence
     }

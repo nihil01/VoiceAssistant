@@ -70,6 +70,7 @@ public final class WebClientTwentyCrmGateway implements TwentyCrmGateway {
         body.put("status", call.status());
         body.put("shortSummary", call.summary().shortSummary());
         body.put("fullSummary", call.summary().fullSummary());
+        body.put("topic", call.summary().topic());
         body.put("intent", call.summary().intent());
         body.put("sentiment", call.summary().sentiment());
         body.put("outcome", call.summary().outcome());

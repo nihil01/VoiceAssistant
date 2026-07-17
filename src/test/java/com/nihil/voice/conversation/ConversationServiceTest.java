@@ -5,6 +5,7 @@ import com.nihil.voice.audio.AudioFrame;
 import com.nihil.voice.call.CallSession;
 import com.nihil.voice.call.CallState;
 import com.nihil.voice.llm.LlmClient;
+import com.nihil.voice.knowledge.KnowledgeRetriever;
 import com.nihil.voice.tts.TtsClient;
 import java.util.ArrayList;
 import java.util.List;
@@ -87,5 +88,38 @@ class ConversationServiceTest {
         var service = new ConversationService(m -> Flux.just("ok"), t -> Flux.just(new byte[]{1}), new TurnCancellationRegistry());
         StepVerifier.create(service.respond(call, "hello", "same-id")).expectNextCount(1).verifyComplete();
         StepVerifier.create(service.respond(call, "hello", "same-id")).verifyComplete();
+    }
+
+    @Test
+    void addsRelevantKnowledgeAsSystemContextWithoutPollutingConversationHistory() {
+        CallSession call = CallSession.create(UUID.randomUUID(), "caller", null, null);
+        call.transitionTo(CallState.ANSWERED);
+        call.transitionTo(CallState.LISTENING);
+        List<List<com.nihil.voice.llm.ConversationMessage>> requests = new ArrayList<>();
+        LlmClient llm = messages -> {
+            requests.add(List.copyOf(messages));
+            return Flux.just("Ответ");
+        };
+        KnowledgeRetriever knowledge = query -> reactor.core.publisher.Mono.just(
+                "Доставка: ежедневно с 09:00 до 18:00"
+        );
+        var service = new ConversationService(
+                llm,
+                text -> Flux.just(new byte[]{1}),
+                new TurnCancellationRegistry(),
+                com.nihil.voice.call.ConversationMessageSink.NOOP,
+                knowledge
+        );
+
+        StepVerifier.create(service.respond(call, "Когда доставка?", "kb-event"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        assertThat(requests).hasSize(1);
+        assertThat(requests.getFirst())
+                .anySatisfy(message -> {
+                    assertThat(message.role()).isEqualTo(com.nihil.voice.llm.ConversationMessage.Role.SYSTEM);
+                    assertThat(message.content()).contains("Доставка: ежедневно");
+                });
     }
 }

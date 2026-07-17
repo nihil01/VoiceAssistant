@@ -16,6 +16,9 @@ Java 21 / Spring Boot WebFlux implementation of the Asterisk AI voice-agent plat
 - Transactional post-call summary/CRM job updates.
 - PostgreSQL outbox → Redis Streams relay.
 - Twenty CRM background worker with idempotent job state.
+- Dedicated Twenty **Звонки** projection with caller, timing, transcript, summary, topic and recording URL.
+- Twenty-managed text knowledge base synchronized to local PostgreSQL/pgvector.
+- Per-turn semantic knowledge retrieval with full-text fallback and graceful CRM outage handling.
 - Actuator, Prometheus metrics, structured logs, non-root Docker image.
 
 ## Build and test
@@ -68,7 +71,7 @@ TWENTY_BASE_URL=http://twenty-server:3000
 TWENTY_API_KEY=...
 ```
 
-Create or reconcile the custom `aiCall`, `callRecording`, and `voicePrompt` objects:
+Create or reconcile the custom `aiCall`, `knowledgeBaseEntry`, `callRecording`, and `voicePrompt` objects:
 
 ```bash
 TWENTY_BASE_URL=http://127.0.0.1:3000 \
@@ -81,6 +84,16 @@ The bootstrap is idempotent. Validate its behavior without a live workspace:
 ```bash
 python3 scripts/test_bootstrap_twenty_schema.py
 ```
+
+The workspace exposes **Звонки** and **База знаний** as normal custom-object sections.
+Create text FAQ/fact records in **База знаний** and leave `Active` enabled. The service
+pulls a snapshot every 30 seconds, stores embeddings locally, and never depends on
+Twenty synchronously while answering a call. Changed records are re-embedded;
+disabled or deleted records are removed from runtime retrieval on the next snapshot.
+
+The voice-agent PostgreSQL container uses `pgvector/pgvector:pg16`. Existing Docker
+volumes remain compatible with the PostgreSQL 16 image; Flyway enables the `vector`
+extension and creates the HNSW index.
 
 `Note` and `Task` remain standard Twenty objects. The integration links them to a
 person through `/rest/noteTargets` and `/rest/taskTargets`; it does not add fake

@@ -17,12 +17,12 @@ public final class R2dbcPostCallStore implements PostCallStore {
  public Mono<Void> complete(PostCallCandidate call,CallSummary s){
   String extracted;try{extracted=mapper.writeValueAsString(s.extractedData());}catch(Exception e){return Mono.error(e);}
   var summary=db.sql("""
-   insert into call_summaries(call_id,short_summary,full_summary,intent,sentiment,lead_quality,outcome,next_action,extracted_data_json)
-   values(:call,:short,:full,:intent,:sentiment,:quality,:outcome,:action,cast(:data as jsonb))
+   insert into call_summaries(call_id,short_summary,full_summary,topic,intent,sentiment,lead_quality,outcome,next_action,extracted_data_json)
+   values(:call,:short,:full,:topic,:intent,:sentiment,:quality,:outcome,:action,cast(:data as jsonb))
    on conflict(call_id) do update set short_summary=excluded.short_summary,full_summary=excluded.full_summary,intent=excluded.intent,
-   sentiment=excluded.sentiment,lead_quality=excluded.lead_quality,outcome=excluded.outcome,next_action=excluded.next_action,extracted_data_json=excluded.extracted_data_json
+   topic=excluded.topic,sentiment=excluded.sentiment,lead_quality=excluded.lead_quality,outcome=excluded.outcome,next_action=excluded.next_action,extracted_data_json=excluded.extracted_data_json
    """);
-  summary=bindNullable(summary,"call",call.callId(),UUID.class);summary=bindNullable(summary,"short",s.shortSummary(),String.class);summary=bindNullable(summary,"full",s.fullSummary(),String.class);summary=bindNullable(summary,"intent",s.intent(),String.class);summary=bindNullable(summary,"sentiment",s.sentiment(),String.class);summary=bindNullable(summary,"quality",s.leadQuality(),String.class);summary=bindNullable(summary,"outcome",s.outcome(),String.class);summary=bindNullable(summary,"action",s.nextAction(),String.class);summary=summary.bind("data",extracted);
+  summary=bindNullable(summary,"call",call.callId(),UUID.class);summary=bindNullable(summary,"short",s.shortSummary(),String.class);summary=bindNullable(summary,"full",s.fullSummary(),String.class);summary=bindNullable(summary,"topic",s.topic(),String.class);summary=bindNullable(summary,"intent",s.intent(),String.class);summary=bindNullable(summary,"sentiment",s.sentiment(),String.class);summary=bindNullable(summary,"quality",s.leadQuality(),String.class);summary=bindNullable(summary,"outcome",s.outcome(),String.class);summary=bindNullable(summary,"action",s.nextAction(),String.class);summary=summary.bind("data",extracted);
   var crmSpec=db.sql("insert into crm_sync_jobs(tenant_id,call_id,external_call_id) values(:tenant,:call,:external) on conflict(external_call_id) do nothing")
    .bind("call",call.callId()).bind("external",call.callId().toString());
   crmSpec=bindNullable(crmSpec,"tenant",call.tenantId(),UUID.class);

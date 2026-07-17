@@ -12,12 +12,13 @@ class LlmCallSummaryProviderTest {
     @Test void parsesStructuredSummaryAcrossStreamingChunks() {
         LlmClient llm = messages -> Flux.just(
             "{\"shortSummary\":\"Клиент спросил цену\",\"fullSummary\":\"Обсудили тариф\",",
-            "\"intent\":\"pricing\",\"sentiment\":\"positive\",\"leadQuality\":\"hot\",",
+            "\"topic\":\"Тарифы и цены\",\"intent\":\"pricing\",\"sentiment\":\"positive\",\"leadQuality\":\"hot\",",
             "\"outcome\":\"follow_up\",\"nextAction\":\"Позвонить завтра\",\"extractedData\":{\"budget\":1000}}"
         );
         var provider = new LlmCallSummaryProvider(llm, new ObjectMapper());
         StepVerifier.create(provider.summarize(new PostCallCandidate(java.util.UUID.randomUUID(), null, "user: цена?")))
             .assertNext(summary -> {
+                assertThat(summary.topic()).isEqualTo("Тарифы и цены");
                 assertThat(summary.intent()).isEqualTo("pricing");
                 assertThat(summary.extractedData()).containsEntry("budget", 1000);
             }).verifyComplete();
